@@ -1,15 +1,15 @@
 _base_ = [
-    '../../_base_/models/swin/swin_tiny.py', '../../_base_/default_runtime.py'
+    '../../_base_/models/swin/swin_small.py', '../../_base_/default_runtime.py'
 ]
-model=dict(backbone=dict(patch_size=(2,4,4), drop_path_rate=0.1), test_cfg=dict(max_testing_views=4))
+model=dict(backbone=dict(patch_size=(2,4,4), drop_path_rate=0.2), cls_head=dict(num_classes=51), test_cfg=dict(max_testing_views=2))
 
 # dataset settings
 dataset_type = 'VideoDataset'
-data_root = 'data/kinetics400/train'
-data_root_val = 'data/kinetics400/val'
-ann_file_train = 'data/kinetics400/kinetics400_train_list.txt'
-ann_file_val = 'data/kinetics400/kinetics400_val_list.txt'
-ann_file_test = 'data/kinetics400/kinetics400_val_list.txt'
+data_root = 'data/hmdb51/videos'
+data_root_val = 'data/hmdb51/videos'
+ann_file_train = 'data/hmdb51/hmdb51_train_split_1_videos.txt'
+ann_file_val = 'data/hmdb51/hmdb51_val_split_1_videos.txt'
+ann_file_test = 'data/hmdb51/hmdb51_val_split_1_videos.txt'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 train_pipeline = [
@@ -102,11 +102,11 @@ lr_config = dict(
     warmup_by_epoch=True,
     warmup_iters=2.5
 )
-total_epochs = 80
+total_epochs = 60
 
 # runtime settings
 checkpoint_config = dict(interval=1)
-work_dir = './work_dirs/k400_swin_tiny_patch244_window877.py'
+work_dir = './work_dirs/swin_small_patch244_window877_hmdb51_1k_first.py'
 find_unused_parameters = False
 
 
@@ -114,7 +114,7 @@ find_unused_parameters = False
 fp16 = None
 optimizer_config = dict(
     type="DistOptimizerHook",
-    update_interval=4,
+    update_interval=8,
     grad_clip=None,
     coalesce=True,
     bucket_size_mb=-1,
