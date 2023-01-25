@@ -5,12 +5,12 @@ import subprocess
 import mmcv
 
 data_root = '../../../data/gym'
-video_root = f'{data_root}/videos'
+video_root = f'{data_root}/missing_videos'
 anno_root = f'{data_root}/annotations'
 anno_file = f'{anno_root}/annotation.json'
 
 event_anno_file = f'{anno_root}/event_annotation.json'
-event_root = f'{data_root}/events'
+event_root = f'{data_root}/missing_events'
 
 videos = os.listdir(video_root)
 videos = set(videos)
@@ -25,7 +25,8 @@ for k, v in annotation.items():
         continue
 
     video_path = osp.join(video_root, k + '.mp4')
-
+    print("------------------------------------")
+    print(video_path)
     for event_id, event_anno in v.items():
         timestamps = event_anno['timestamps'][0]
         start_time, end_time = timestamps

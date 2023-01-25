@@ -17,6 +17,7 @@ from mmaction.datasets import build_dataset
 from mmaction.models import build_model
 from mmaction.utils import collect_env, get_root_logger, register_module_hooks
 
+import pdb
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a recognizer')
@@ -182,7 +183,7 @@ def main():
         cfg.checkpoint_config.meta = dict(
             mmaction_version=__version__ + get_git_hash(digits=7),
             config=cfg.pretty_text)
-
+            
     test_option = dict(test_last=args.test_last, test_best=args.test_best)
     train_model(
         model,

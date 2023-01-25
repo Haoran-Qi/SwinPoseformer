@@ -18,6 +18,7 @@ from .necks import TPN
 from .recognizers import (AudioRecognizer, BaseRecognizer, Recognizer2D,
                           Recognizer3D)
 from .roi_extractors import SingleRoIExtractor3D
+from .skeleton_gcn import BaseGCN, SkeletonGCN
 
 __all__ = [
     'BACKBONES', 'HEADS', 'RECOGNIZERS', 'build_recognizer', 'build_head',
@@ -32,5 +33,5 @@ __all__ = [
     'AudioTSNHead', 'X3D', 'X3DHead', 'ResNet3dLayer', 'DETECTORS',
     'SingleRoIExtractor3D', 'BBoxHeadAVA', 'ResNetAudio', 'build_detector',
     'ConvAudio', 'AVARoIHead', 'MobileNetV2', 'MobileNetV2TSM', 'TANet', 'LFB',
-    'FBOHead', 'LFBInferHead', 'TRNHead', 'NECKS', 'ACRNHead'
+    'FBOHead', 'LFBInferHead', 'TRNHead', 'NECKS', 'ACRNHead', "BaseGCN", "SkeletonGCN"
 ]

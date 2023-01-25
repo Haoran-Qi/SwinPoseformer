@@ -100,7 +100,7 @@ lr_config = dict(
     min_lr=0,
     warmup='linear',
     warmup_by_epoch=True,
-    warmup_iters=2.5
+    warmup_iters=2
 )
 total_epochs = 30
 
@@ -109,14 +109,14 @@ checkpoint_config = dict(interval=1)
 work_dir = './work_dirs/swin_tiny_patch244_window877_hmdb51_1k_first.py'
 find_unused_parameters = False
 
-
+optimizer_config = dict(grad_clip=None)
 # do not use mmdet version fp16
-fp16 = None
-optimizer_config = dict(
-    type="DistOptimizerHook",
-    update_interval=4,
-    grad_clip=None,
-    coalesce=True,
-    bucket_size_mb=-1,
-    use_fp16=True,
-)
+# fp16 = None
+# optimizer_config = dict(
+#     type="DistOptimizerHook",
+#     update_interval=4,
+#     grad_clip=None,
+#     coalesce=True,
+#     bucket_size_mb=-1,
+#     use_fp16=True,
+# )

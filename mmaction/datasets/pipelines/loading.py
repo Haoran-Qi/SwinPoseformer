@@ -962,6 +962,9 @@ class DecordInit:
             self.file_client = FileClient(self.io_backend, **self.kwargs)
 
         file_obj = io.BytesIO(self.file_client.get(results['filename']))
+        # print("=== handling file ==========+ " )
+        # print(results['filename'])
+        # print(file_obj)
         container = decord.VideoReader(file_obj, num_threads=self.num_threads)
         results['video_reader'] = container
         results['total_frames'] = len(container)
@@ -992,7 +995,6 @@ class DecordDecode:
                 to the next transform in pipeline.
         """
         container = results['video_reader']
-
         if results['frame_inds'].ndim != 1:
             results['frame_inds'] = np.squeeze(results['frame_inds'])
 

@@ -8,8 +8,8 @@ data_root = '../../../data/gym'
 anno_root = f'{data_root}/annotations'
 
 event_anno_file = f'{anno_root}/event_annotation.json'
-event_root = f'{data_root}/events'
-subaction_root = f'{data_root}/subactions'
+event_root = f'{data_root}/missing_events'
+subaction_root = f'{data_root}/missing_subactions'
 
 events = os.listdir(event_root)
 events = set(events)
@@ -24,14 +24,15 @@ for k, v in annotation.items():
         continue
 
     video_path = osp.join(event_root, k + '.mp4')
+    print("------------------------------------")
+    print(video_path)
 
     for subaction_id, subaction_anno in v.items():
         timestamps = subaction_anno['timestamps']
         start_time, end_time = timestamps[0][0], timestamps[-1][1]
         subaction_name = k + '_' + subaction_id
-
         output_filename = subaction_name + '.mp4'
-
+        
         command = [
             'ffmpeg', '-i',
             '"%s"' % video_path, '-ss',

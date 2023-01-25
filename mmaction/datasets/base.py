@@ -9,6 +9,7 @@ import numpy as np
 import torch
 from mmcv.utils import print_log
 from torch.utils.data import Dataset
+import pdb
 
 from ..core import (mean_average_precision, mean_class_accuracy,
                     mmit_mean_average_precision, top_k_accuracy)
@@ -257,7 +258,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
             onehot = torch.zeros(self.num_classes)
             onehot[results['label']] = 1.
             results['label'] = onehot
-
+        
         return self.pipeline(results)
 
     def prepare_test_frames(self, idx):

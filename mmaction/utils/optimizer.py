@@ -4,6 +4,7 @@ try:
 except:
     print('apex is not installed')
 
+import pdb
 
 @HOOKS.register_module()
 class DistOptimizerHook(OptimizerHook):

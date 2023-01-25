@@ -126,6 +126,7 @@ class UniformSampleFrames:
         results['clip_len'] = self.clip_len
         results['frame_interval'] = None
         results['num_clips'] = self.num_clips
+
         return results
 
     def __repr__(self):
@@ -371,6 +372,8 @@ class GeneratePoseTarget:
         right_kp (tuple[int]): Indexes of right keypoints, which is used when
             flipping heatmaps. Default: (2, 4, 6, 8, 10, 12, 14, 16),
             which is right keypoints in COCO-17p.
+        keep_img(boolean): save as heatmap in result instead of imgs
+            Default: False
     """
 
     def __init__(self,
@@ -382,6 +385,8 @@ class GeneratePoseTarget:
                             (7, 9), (0, 6), (6, 8), (8, 10), (5, 11), (11, 13),
                             (13, 15), (6, 12), (12, 14), (14, 16), (11, 12)),
                  double=False,
+                 keep_img=False,
+                 shrink_mode = 0,
                  left_kp=(1, 3, 5, 7, 9, 11, 13, 15),
                  right_kp=(2, 4, 6, 8, 10, 12, 14, 16)):
 
@@ -390,6 +395,8 @@ class GeneratePoseTarget:
         self.with_kp = with_kp
         self.with_limb = with_limb
         self.double = double
+        self.keep_img = keep_img
+        self.shrink_mode = shrink_mode
 
         # an auxiliary const
         self.eps = 1e-4
@@ -566,7 +573,35 @@ class GeneratePoseTarget:
                                                        end_values)
                 heatmaps.append(heatmap)
 
-        return np.stack(heatmaps, axis=-1)
+        if self.shrink_mode == 0:
+            # 34 channal with limb and kp 
+            final_heatmap = np.stack(heatmaps, axis=-1)
+        elif self.shrink_mode == 1:
+            # 2 channel combing each limb and kp
+            final_heatmap = [np.max(heatmap, axis=-1).reshape(img_h, img_w, 1) for heatmap in heatmaps]
+            final_heatmap = np.stack(final_heatmap, axis=-1)
+
+        elif self.shrink_mode == 2:
+            # 1 channel combing all
+            final_heatmap = np.stack(heatmaps, axis=-1) 
+            final_heatmap = np.max(final_heatmap, axis=-1).reshape(img_h, img_w, 1)
+
+        elif self.shrink_mode == 3:
+            # stack 1 channel into 3 channel
+            final_heatmap = np.stack(heatmaps, axis=-1) 
+            final_heatmap = np.max(final_heatmap, axis=-1).reshape(img_h, img_w, 1)
+            final_heatmap = np.tile(final_heatmap, (1,1,3))
+        
+        elif self.shrink_mode == 4:
+            # 3 channel combing each limb and kp
+            kp_heatmap = np.stack(heatmaps[:17], axis=-1)
+            kp_max_heatmap = np.max(kp_heatmap, axis=-1).reshape(img_h, img_w, 1)
+            limb_heatmap = np.stack(heatmaps[17:], axis=-1)
+            limb_max_heatmap = np.max(limb_heatmap, axis=-1).reshape(img_h, img_w, 1)
+            all_heatmaps = np.stack(heatmaps, axis=-1)
+            all_max_heatmap = np.max(all_heatmaps, axis=-1).reshape(img_h, img_w, 1)
+            final_heatmap = np.concatenate((kp_max_heatmap,limb_max_heatmap,all_max_heatmap), axis=-1)
+        return final_heatmap
 
     def gen_an_aug(self, results):
         """Generate pseudo heatmaps for all frames.
@@ -605,16 +640,22 @@ class GeneratePoseTarget:
         return imgs
 
     def __call__(self, results):
+        heatmaps = []
         if not self.double:
-            results['imgs'] = np.stack(self.gen_an_aug(results))
+            heatmaps = np.stack(self.gen_an_aug(results))
         else:
             results_ = cp.deepcopy(results)
             flip = Flip(
                 flip_ratio=1, left_kp=self.left_kp, right_kp=self.right_kp)
             results_ = flip(results_)
-            results['imgs'] = np.concatenate(
-                [self.gen_an_aug(results),
-                 self.gen_an_aug(results_)])
+            heatmaps = np.concatenate(
+                    [self.gen_an_aug(results),
+                    self.gen_an_aug(results_)])
+
+        if self.keep_img:
+            results['heatmaps'] = heatmaps
+        else:
+            results['imgs'] = heatmaps
         return results
 
     def __repr__(self):
@@ -628,3 +669,153 @@ class GeneratePoseTarget:
                     f'left_kp={self.left_kp}, '
                     f'right_kp={self.right_kp})')
         return repr_str
+
+
+@PIPELINES.register_module()
+class FormatHeatMap:
+    """Format final heatmaps shape to the given input_format.
+
+    Required keys are "heatmaps", "num_clips" and "clip_len", added or modified
+    keys are "heatmaps" and "input_shape".
+
+    Args:
+        input_format (str): Define the final heatmaps format.
+        collapse (bool): To collpase input_format N... to ... (NCTHW to CTHW,
+            etc.) if N is 1. Should be set as True when training and testing
+            detectors. Default: False.
+    """
+
+    def __init__(self, input_format, collapse=False):
+        self.input_format = input_format
+        self.collapse = collapse
+        if self.input_format not in ['NCTHW', 'NCHW', 'NCHW_Flow', 'NPTCHW']:
+            raise ValueError(
+                f'The input format {self.input_format} is invalid.')
+
+    def __call__(self, results):
+        """Performs the FormatShape formating.
+
+        Args:
+            results (dict): The resulting dict to be modified and passed
+                to the next transform in pipeline.
+        """
+        if not isinstance(results['heatmaps'], np.ndarray):
+            results['heatmaps'] = np.array(results['heatmaps'])
+        heatmaps = results['heatmaps']
+        # [M x H x W x C]
+        # M = 1 * N_crops * N_clips * L
+        if self.collapse:
+            assert results['num_clips'] == 1
+
+        if self.input_format == 'NCTHW':
+            num_clips = results['num_clips']
+            clip_len = results['clip_len']
+
+            heatmaps = heatmaps.reshape((-1, num_clips, clip_len) + heatmaps.shape[1:])
+            # N_crops x N_clips x L x H x W x C
+            heatmaps = np.transpose(heatmaps, (0, 1, 5, 2, 3, 4))
+            # N_crops x N_clips x C x L x H x W
+            heatmaps = heatmaps.reshape((-1, ) + heatmaps.shape[2:])
+            # M' x C x L x H x W
+            # M' = N_crops x N_clips
+        elif self.input_format == 'NCHW':
+            heatmaps = np.transpose(heatmaps, (0, 3, 1, 2))
+            # M x C x H x W
+        elif self.input_format == 'NCHW_Flow':
+            num_clips = results['num_clips']
+            clip_len = results['clip_len']
+            heatmaps = heatmaps.reshape((-1, num_clips, clip_len) + heatmaps.shape[1:])
+            # N_crops x N_clips x L x H x W x C
+            heatmaps = np.transpose(heatmaps, (0, 1, 2, 5, 3, 4))
+            # N_crops x N_clips x L x C x H x W
+            heatmaps = heatmaps.reshape((-1, heatmaps.shape[2] * heatmaps.shape[3]) +
+                                heatmaps.shape[4:])
+            # M' x C' x H x W
+            # M' = N_crops x N_clips
+            # C' = L x C
+        elif self.input_format == 'NPTCHW':
+            num_proposals = results['num_proposals']
+            num_clips = results['num_clips']
+            clip_len = results['clip_len']
+            heatmaps = heatmaps.reshape((num_proposals, num_clips * clip_len) +
+                                heatmaps.shape[1:])
+            # P x M x H x W x C
+            # M = N_clips x L
+            heatmaps = np.transpose(heatmaps, (0, 1, 4, 2, 3))
+            # P x M x C x H x W
+        if self.collapse:
+            assert heatmaps.shape[0] == 1
+            heatmaps = heatmaps.squeeze(0)
+
+        results['heatmaps'] = heatmaps
+        results['input_shape'] = heatmaps.shape
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f"(input_format='{self.input_format}')"
+        return repr_str
+
+        
+@PIPELINES.register_module()
+class PaddingWithLoop:
+    """Sample frames from the video.
+
+    To sample an n-frame clip from the video, PaddingWithLoop samples
+    the frames from zero index, and loop the frames if the length of
+    video frames is less than te value of 'clip_len'.
+
+    Required keys are "total_frames", added or modified keys
+    are "frame_inds", "clip_len", "frame_interval" and "num_clips".
+
+    Args:
+        clip_len (int): Frames of each sampled output clip.
+        num_clips (int): Number of clips to be sampled. Default: 1.
+    """
+
+    def __init__(self, clip_len, num_clips=1):
+
+        self.clip_len = clip_len
+        self.num_clips = num_clips
+
+    def __call__(self, results):
+        num_frames = results['total_frames']
+
+        start = 0
+        inds = np.arange(start, start + self.clip_len)
+        inds = np.mod(inds, num_frames)
+
+        results['frame_inds'] = inds.astype(np.int)
+        results['clip_len'] = self.clip_len
+        results['frame_interval'] = None
+        results['num_clips'] = self.num_clips
+        return results
+
+
+@PIPELINES.register_module()
+class PoseNormalize:
+    """Normalize the range of keypoint values to [-1,1].
+
+    Args:
+        mean (list | tuple): The mean value of the keypoint values.
+        min_value (list | tuple): The minimum value of the keypoint values.
+        max_value (list | tuple): The maximum value of the keypoint values.
+    """
+
+    def __init__(self,
+                 mean=(960., 540., 0.5),
+                 min_value=(0., 0., 0.),
+                 max_value=(1920, 1080, 1.)):
+        self.mean = np.array(mean, dtype=np.float32).reshape(-1, 1, 1, 1)
+        self.min_value = np.array(
+            min_value, dtype=np.float32).reshape(-1, 1, 1, 1)
+        self.max_value = np.array(
+            max_value, dtype=np.float32).reshape(-1, 1, 1, 1)
+
+    def __call__(self, results):
+        keypoint = results['keypoint']
+        keypoint = (keypoint - self.mean) / (self.max_value - self.min_value)
+        results['keypoint'] = keypoint
+        results['keypoint_norm_cfg'] = dict(
+            mean=self.mean, min_value=self.min_value, max_value=self.max_value)
+        return results

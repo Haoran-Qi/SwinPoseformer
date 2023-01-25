@@ -90,7 +90,6 @@ class PoseDataset(BaseDataset):
 
     def load_pkl_annotations(self):
         data = mmcv.load(self.ann_file)
-
         for item in data:
             # Sometimes we may need to load anno from the file
             if 'filename' in item:
